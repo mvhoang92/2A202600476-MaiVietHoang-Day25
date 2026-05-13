@@ -10,4 +10,11 @@ def test_gateway_returns_response_with_route_reason() -> None:
     gateway = ReliabilityGateway([provider], {"primary": breaker}, ResponseCache(60, 0.5))
     result = gateway.complete("hello world")
     assert result.text
-    assert result.route in {"primary", "fallback", "static_fallback"}
+    # Route reasons are now specific: "primary:{name}", "fallback:{name}", "cache_hit:{score}",
+    # or "static_fallback"
+    assert (
+        result.route.startswith("primary:")
+        or result.route.startswith("fallback:")
+        or result.route.startswith("cache_hit:")
+        or result.route == "static_fallback"
+    )

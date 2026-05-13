@@ -21,16 +21,25 @@ load_test:
   requests: 100
 
 # Chaos scenarios: each overrides provider fail_rate for targeted testing.
-# TODO(student): Add more scenarios or tweak these.
 scenarios:
   - name: primary_timeout_100
-    description: "Primary provider fails 100% — all traffic should fallback"
+    description: "Primary provider fails 100% — all traffic should fallback to backup"
     provider_overrides:
       primary: 1.0
+
   - name: primary_flaky_50
-    description: "Primary provider fails 50% — circuit should oscillate"
+    description: "Primary provider fails 50% — circuit should oscillate between OPEN and CLOSED"
     provider_overrides:
       primary: 0.5
+
   - name: all_healthy
-    description: "Baseline — both providers healthy"
-    provider_overrides: {}
+    description: "Baseline — both providers healthy, no circuit opens expected"
+    provider_overrides:
+      primary: 0.0
+      backup: 0.0
+
+  - name: all_fail
+    description: "Both providers fail 100% — static fallback should be used"
+    provider_overrides:
+      primary: 1.0
+      backup: 1.0

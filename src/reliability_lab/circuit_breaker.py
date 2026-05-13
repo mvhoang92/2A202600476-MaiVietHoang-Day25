@@ -20,12 +20,14 @@ class CircuitOpenError(RuntimeError):
 
 @dataclass(slots=True)
 class CircuitBreaker:
-    """Circuit breaker skeleton.
+    """Production-safe 3-state circuit breaker.
 
-    TODO(student): Implement a production-safe state machine:
-    - CLOSED: calls pass through; count failures.
-    - OPEN: fail fast until reset timeout elapses.
-    - HALF_OPEN: allow a probe; close on success or re-open on failure.
+    States:
+    - CLOSED: calls pass through; failure_count increments on each error.
+    - OPEN: fail fast (CircuitOpenError) until reset_timeout_seconds elapses.
+    - HALF_OPEN: allow one probe; close on success, re-open immediately on failure.
+
+    Transition log records every state change with timestamp for recovery-time analysis.
     """
 
     name: str
@@ -39,13 +41,16 @@ class CircuitBreaker:
     transition_log: list[dict[str, str | float]] = field(default_factory=list)
 
     def allow_request(self) -> bool:
-        """Return whether a request should be attempted.
+        """Return True if a request should be attempted.
 
-        TODO(student): Return False when OPEN and timeout has not elapsed.
-        When timeout elapsed, transition to HALF_OPEN and allow one probe.
+        Returns False when OPEN and the reset timeout has not elapsed.
+        Transitions to HALF_OPEN when the timeout elapses, allowing one probe.
         """
         if self.state == CircuitState.OPEN:
-            if self.opened_at is not None and time.monotonic() - self.opened_at >= self.reset_timeout_seconds:
+            if (
+                self.opened_at is not None
+                and time.monotonic() - self.opened_at >= self.reset_timeout_seconds
+            ):
                 self._transition(CircuitState.HALF_OPEN, "reset_timeout_elapsed")
                 return True
             return False
@@ -64,8 +69,11 @@ class CircuitBreaker:
         return result
 
     def record_success(self) -> None:
-        """Record success and close from HALF_OPEN if enough probes pass."""
-        # TODO(student): refine success threshold handling and counters.
+        """Record a successful call.
+
+        Resets failure_count. In HALF_OPEN, closes the circuit once
+        success_count reaches success_threshold.
+        """
         self.failure_count = 0
         self.success_count += 1
         if self.state == CircuitState.HALF_OPEN and self.success_count >= self.success_threshold:
@@ -73,8 +81,12 @@ class CircuitBreaker:
             self.success_count = 0
 
     def record_failure(self) -> None:
-        """Record failure and open when threshold is reached."""
-        # TODO(student): handle HALF_OPEN failure explicitly and reset success counter.
+        """Record a failed call.
+
+        Increments failure_count and resets success_count.
+        In HALF_OPEN: re-opens immediately.
+        In CLOSED: opens when failure_count reaches failure_threshold.
+        """
         self.failure_count += 1
         self.success_count = 0
         if self.state == CircuitState.HALF_OPEN or self.failure_count >= self.failure_threshold:
